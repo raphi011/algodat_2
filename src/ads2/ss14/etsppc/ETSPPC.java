@@ -106,7 +106,6 @@ public class ETSPPC extends AbstractETSPPC {
                 p.lowerBound += getDistance(secondLastDest,lastDest);
                 p.lowerBound += getDistance(lastDest, firstDest);
 
-
                 if (p.lowerBound < upperBound) {
                     upperBound = p.lowerBound;
                     p.pathTaken.add(lastDest);
@@ -114,8 +113,6 @@ public class ETSPPC extends AbstractETSPPC {
                     removeBadSolutions();
                 }
             } else {
-
-                int cityId = p.getLastVisitedLocation().getCityId();
 
                 for (Integer destination : p.columnIndices) {
                     Problem newProblem = p.subProblem(locations.get(destination));
@@ -142,15 +139,6 @@ public class ETSPPC extends AbstractETSPPC {
     private double getDistance(int from, int to) {
         return distances[from-1][to-1];
     }
-
-//    private double calculateLowerBound(Problem p) {
-//
-//
-//
-//
-//
-//
-//    }
 
     private void removeBadSolutions() {
         Problem p;
@@ -179,80 +167,6 @@ public class ETSPPC extends AbstractETSPPC {
 
         return lowerBound;
     }
-
-//    private Point getMinimum(Problem p) {
-//        Point point = new Point(p.rowIndices.first(), p.columnIndices.first());
-//
-//        for (Integer x : p.rowIndices) {
-//            for (Integer y : p.columnIndices) {
-//                // TODO:  if element is in p.pathtaken skip ... (emulate setting infinity on already taken routes)
-//                if (distances[x][y] < distances[point.x][point.y])
-//                    point = new Point(x,y);
-//            }
-//        }
-//
-//        return point;
-//    }
-
-
-
-//    private double reduce(double[][] matrix) {
-//        double reduced = 0;
-//
-//        for (int row = 0; row < matrix.length; row++) {
-//            double minimum;
-//
-//            if ((minimum = getMinimum(matrix,row)) == 0) continue;
-//            else reduced += minimum;
-//
-//            for (int column = 0; column < matrix.length; column++)
-//                matrix[row][column] -= minimum;
-//        }
-//
-//        return reduced;
-//    }
-
-//    private double getUpperBound(double[][] matrix) {
-//        int roundTripSize = matrix.length;
-//        int upperBound = 0;
-//
-//        HashMap<Integer, Location> allowedValues = new HashMap<Integer,Location>(locations);
-//        HashMap<Integer,Integer> constraint = new HashMap<Integer,Integer>(roundTripSize+1,1);
-//
-//        for (PrecedenceConstraint c : constraints) {
-//            if (allowedValues.containsKey(c.getSecond()))
-//                allowedValues.remove(c.getSecond());
-//
-//            constraint.put(c.getFirst(), c.getSecond());
-//        }
-//
-//        HashSet<Integer> trip = new HashSet<Integer>();
-//        int toAdd = 1;
-//
-//        while (trip.size() < roundTripSize) {
-//
-//
-//            if (trip.size() > 0)  {
-//                int lastAdded = toAdd;
-//
-//                for (Integer i : allowedValues.keySet()) {
-//                    if ( toAdd == lastAdded || matrix[lastAdded-1][i-1] < matrix[lastAdded-1][toAdd-1])
-//                        toAdd = i;
-//                }
-//
-//                upperBound += matrix[lastAdded-1][toAdd-1];
-//            }
-//
-//            trip.add(toAdd);
-//            allowedValues.remove(toAdd);
-//            if (constraint.containsKey(toAdd)) {
-//                int value = constraint.get(toAdd);
-//                allowedValues.put(value, locations.get(value));
-//            }
-//        }
-//
-//        return upperBound;
-//    }
 }
 
 class Problem implements Comparable<Problem>{
