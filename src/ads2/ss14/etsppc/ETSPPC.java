@@ -9,7 +9,7 @@ import java.util.List;
  */
 public class ETSPPC extends AbstractETSPPC {
 
-    private double[][] distances;
+   // private double[][] distances;
 
     private Map<Integer, Location> locations;
     private Map[] constraints;
@@ -20,10 +20,11 @@ public class ETSPPC extends AbstractETSPPC {
 
     public ETSPPC(ETSPPCInstance instance) {
 
-        upperBound = instance.getThreshold();
+
         locations = instance.getAllLocations();
-        distances = createMatrix(locations);
+        //distances = createMatrix(locations);
         constraints = getConstraints(instance.getConstraints());
+
 
         Problem p = new Problem(new TreeSet<Integer>(constraints[0].keySet()),
                 new TreeSet<Integer>(constraints[0].keySet()),
@@ -41,39 +42,25 @@ public class ETSPPC extends AbstractETSPPC {
 
     private int getStartingPoint(List<PrecedenceConstraint> cons) {
         // TODO: Look for better start node
-        int startingPoint = 0;
-        boolean found;
-
-        do {
-          found = true;
-          startingPoint++;
-          for (PrecedenceConstraint c : cons) {
-            if (c.getSecond() == startingPoint) {
-                found = false;
-                break;
-            }
-          }
-        } while (!found);
-
-        return startingPoint;
+        return (Integer)constraints[0].keySet().iterator().next();
     }
 
-    private double[][] createMatrix(Map<Integer, Location> locations) {
-        int count = locations.size();
-
-        double[][] matrix = new double[count][count];
-
-        for (int x = 0; x < count; x++) {
-            matrix[x][x] = Double.POSITIVE_INFINITY;
-            for (int y = x+1; y < count; y++) {
-                double entfernung = locations.get(x+1).distanceTo(locations.get(y+1));
-                matrix[x][y] = entfernung;
-                matrix[y][x] = entfernung;
-            }
-        }
-
-        return matrix;
-    }
+//    private double[][] createMatrix(Map<Integer, Location> locations) {
+//        int count = locations.size();
+//
+//        double[][] matrix = new double[count][count];
+//
+//        for (int x = 0; x < count; x++) {
+//            matrix[x][x] = Double.POSITIVE_INFINITY;
+//            for (int y = x+1; y < count; y++) {
+//                double entfernung = locations.get(x+1).distanceTo(locations.get(y+1));
+//                matrix[x][y] = entfernung;
+//                matrix[y][x] = entfernung;
+//            }
+//        }
+//
+//        return matrix;
+//    }
 
     private Map[] getConstraints(List<PrecedenceConstraint> constraints) {
 
@@ -94,7 +81,6 @@ public class ETSPPC extends AbstractETSPPC {
         return results;
     }
 
-
     /**
      * Diese Methode bekommt vom Framework maximal 30 Sekunden Zeit zur
      * Verf&uuml;gung gestellt um eine g&uuml;ltige Tour
@@ -111,6 +97,8 @@ public class ETSPPC extends AbstractETSPPC {
     }
 
     private void branchandbound() {
+        setUpperBound();
+
         Problem p;
 
         while ((p = problems.pollFirst()) != null) {
@@ -131,8 +119,8 @@ public class ETSPPC extends AbstractETSPPC {
                 }
             } else {
 
-                for (Integer destination : p.travelTo) {
-                   // if (p.alreadyVisited(locations.get(destination))) continue;
+                        for (Integer destination : p.travelTo) {
+                    // if (p.alreadyVisited(locations.get(destination))) continue;
 
                     Problem newProblem = p.subProblem(locations.get(destination));
 
@@ -151,11 +139,11 @@ public class ETSPPC extends AbstractETSPPC {
     }
 
     private double getDistance(Location from, Location to) {
-        return getDistance(from.getCityId(), to.getCityId());
+        return from.distanceTo(to);
     }
 
     private double getDistance(int from, int to) {
-        return distances[from-1][to-1];
+        return getDistance(locations.get(from), locations.get(to));
     }
 
     private void removeBadSolutions() {
@@ -171,14 +159,14 @@ public class ETSPPC extends AbstractETSPPC {
     private double getMinimum(Problem p) {
         double lowerBound = 0;
 
-        for (Integer x : p.travelFrom) {
+        for (Integer to : p.travelTo) {
             double minimum = Double.POSITIVE_INFINITY;
 
-            for (Integer y : p.travelTo) {
+            for (Integer from : p.travelFrom) {
                 // TODO:  if location is already visited skip ... (emulate setting infinity on already taken routes)
-               // if (p.alreadyVisited(locations.get(y))) continue;
-                if (getDistance(x,y) < minimum)
-                    minimum = getDistance(x,y);
+                // if (p.alreadyVisited(locations.get(y))) continue;
+                if (getDistance(to,from) < minimum)
+                    minimum = getDistance(to,from);
             }
 
             if (minimum != Double.POSITIVE_INFINITY)
@@ -186,6 +174,43 @@ public class ETSPPC extends AbstractETSPPC {
         }
 
         return lowerBound;
+    }
+
+    private void setUpperBound() {
+        int roundTripSize = locations.size();
+        LinkedList<Location> pathTaken = new LinkedList<Location>();
+        upperBound = 0;
+
+        TreeSet<Integer> allowedValues = new TreeSet<Integer>(constraints[0].keySet());
+
+        int toAdd = allowedValues.pollFirst();
+
+        while (pathTaken.size() < roundTripSize) {
+
+
+            if (pathTaken.size() > 0)  {
+                int lastAdded = toAdd;
+
+                for (Integer i : allowedValues) {
+                    if ( toAdd == lastAdded || getDistance(lastAdded,i) < getDistance(lastAdded,toAdd))
+                        toAdd = i;
+                }
+
+                upperBound += getDistance(lastAdded,toAdd);
+            }
+
+            pathTaken.add(locations.get(toAdd));
+            allowedValues.remove(toAdd);
+            if (constraints[1].containsKey(toAdd)) {
+                int value = (Integer)constraints[1].get(toAdd);
+                allowedValues.add(value);
+            }
+        }
+
+        upperBound += getDistance(pathTaken.getLast(),pathTaken.getFirst());
+        pathTaken.add(pathTaken.getFirst());
+
+        setSolution(upperBound,pathTaken);
     }
 }
 
