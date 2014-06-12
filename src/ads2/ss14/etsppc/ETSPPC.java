@@ -1,6 +1,5 @@
 package ads2.ss14.etsppc;
 
-import java.awt.*;
 import java.util.*;
 import java.util.List;
 
@@ -21,6 +20,7 @@ public class ETSPPC extends AbstractETSPPC {
 
     public ETSPPC(ETSPPCInstance instance) {
 
+        upperBound = instance.getThreshold();
         locations = instance.getAllLocations();
         distances = createMatrix(locations);
         constraints = getConstraints(instance.getConstraints());
@@ -29,12 +29,33 @@ public class ETSPPC extends AbstractETSPPC {
                 new TreeSet<Integer>(constraints[0].keySet()),
                 new LinkedList<Location>());
 
-        // TODO: Look for better start node
-        p.pathTaken.add(locations.get(1));
         p.lowerBound = getMinimum(p);
+        int startingPoint = getStartingPoint(instance.getConstraints());
+        p.pathTaken.add(locations.get(startingPoint));
+        p.travelTo.remove(startingPoint);
+
 
         problems = new TreeSet<Problem>();
         problems.add(p);
+    }
+
+    private int getStartingPoint(List<PrecedenceConstraint> cons) {
+        // TODO: Look for better start node
+        int startingPoint = 0;
+        boolean found;
+
+        do {
+          found = true;
+          startingPoint++;
+          for (PrecedenceConstraint c : cons) {
+            if (c.getSecond() == startingPoint) {
+                found = false;
+                break;
+            }
+          }
+        } while (!found);
+
+        return startingPoint;
     }
 
     private double[][] createMatrix(Map<Integer, Location> locations) {
@@ -99,32 +120,29 @@ public class ETSPPC extends AbstractETSPPC {
                 // add last location to path, calculate length ("lowerbound"),
                 // compare with upperbound and if lower -> set new upperbound
                 // and remove invalid problems
-                Location secondLastDest = p.getLastVisitedLocation();
-                Location lastDest = locations.get(p.columnIndices.pollFirst());
-                Location firstDest = p.pathTaken.get(0);
 
-                p.lowerBound += getDistance(secondLastDest,lastDest);
-                p.lowerBound += getDistance(lastDest, firstDest);
+                p.setNewDestination(locations.get(p.travelTo.pollFirst()));
+                p.setNewDestination(p.pathTaken.get(0));
 
-                if (p.lowerBound < upperBound) {
-                    upperBound = p.lowerBound;
-                    p.pathTaken.add(lastDest);
-                    setSolution(upperBound,p.pathTaken);
+                if (p.alreadyTraveled < upperBound) {
+                    upperBound = p.alreadyTraveled;
+                    boolean okay = setSolution(upperBound,p.pathTaken);
                     removeBadSolutions();
                 }
             } else {
 
-                for (Integer destination : p.columnIndices) {
+                for (Integer destination : p.travelTo) {
+                   // if (p.alreadyVisited(locations.get(destination))) continue;
+
                     Problem newProblem = p.subProblem(locations.get(destination));
 
                     if (constraints[1].containsKey(destination)) {
-                        int newAvailableDest = (int)constraints[1].get(destination);
-                        newProblem.rowIndices.add(newAvailableDest);
-                        newProblem.columnIndices.add(newAvailableDest);
+                        int newAvailableDest = (Integer)constraints[1].get(destination);
+                        newProblem.travelFrom.add(newAvailableDest);
+                        newProblem.travelTo.add(newAvailableDest);
                     }
 
-
-                    newProblem.lowerBound = getMinimum(newProblem);
+                    newProblem.setLowerBound(getMinimum(newProblem));
 
                     if (newProblem.lowerBound < upperBound) problems.add(newProblem);
                 }
@@ -153,16 +171,18 @@ public class ETSPPC extends AbstractETSPPC {
     private double getMinimum(Problem p) {
         double lowerBound = 0;
 
-        for (Integer x : p.rowIndices) {
+        for (Integer x : p.travelFrom) {
             double minimum = Double.POSITIVE_INFINITY;
 
-            for (Integer y : p.columnIndices) {
-                // TODO:  if element is in p.pathtaken skip ... (emulate setting infinity on already taken routes)
-                if (distances[x][y] < minimum)
-                    minimum = distances[x][y];
+            for (Integer y : p.travelTo) {
+                // TODO:  if location is already visited skip ... (emulate setting infinity on already taken routes)
+               // if (p.alreadyVisited(locations.get(y))) continue;
+                if (getDistance(x,y) < minimum)
+                    minimum = getDistance(x,y);
             }
 
-            lowerBound += minimum;
+            if (minimum != Double.POSITIVE_INFINITY)
+                lowerBound += minimum;
         }
 
         return lowerBound;
@@ -172,36 +192,57 @@ public class ETSPPC extends AbstractETSPPC {
 class Problem implements Comparable<Problem>{
 
     public double lowerBound;
+    public double alreadyTraveled;
 
-    public TreeSet<Integer> rowIndices;
-    public TreeSet<Integer> columnIndices;
+    public TreeSet<Integer> travelFrom;
+    public TreeSet<Integer> travelTo;
     public List<Location> pathTaken;
 
-    Problem(TreeSet<Integer> rowIndices, TreeSet<Integer> columnIndices, List<Location> pathTaken) {
-        this.rowIndices = rowIndices;
-        this.columnIndices = columnIndices;
+    Problem(TreeSet<Integer> travelFrom, TreeSet<Integer> travelTo, List<Location> pathTaken) {
+        this.travelFrom = travelFrom;
+        this.travelTo = travelTo;
         this.pathTaken = pathTaken;
     }
 
     public Problem subProblem(Location nextLocation) {
-        Problem p = new Problem(new TreeSet<Integer>(this.rowIndices),
-                new TreeSet<Integer>(this.columnIndices),
+        Problem p = new Problem(new TreeSet<Integer>(this.travelFrom),
+                new TreeSet<Integer>(this.travelTo),
                 new LinkedList<Location>(this.pathTaken));
 
-        p.rowIndices.remove(getLastVisitedLocation().getCityId());
-        p.pathTaken.add(nextLocation);
-        p.columnIndices.remove(nextLocation.getCityId());
+        p.travelFrom.remove(getLastVisitedLocation().getCityId());
+        p.alreadyTraveled = alreadyTraveled;
+        p.setNewDestination(nextLocation);
+        p.travelTo.remove(nextLocation.getCityId());
 
         return p;
     }
 
+    public void setNewDestination(Location loc) {
+        Location lastVisited = getLastVisitedLocation();
+        alreadyTraveled += lastVisited == null ? 0 : lastVisited.distanceTo(loc);
+        pathTaken.add(loc);
+    }
+
+    public void setLowerBound(double lowerBound) {
+        this.lowerBound = alreadyTraveled + lowerBound;
+    }
+
     public Location getLastVisitedLocation() {
-        return this.pathTaken.get(this.pathTaken.size() - 1);
+        return this.pathTaken.size() == 0 ? null : this.pathTaken.get(this.pathTaken.size() - 1);
+    }
+
+    public boolean alreadyVisited(Location loc) {
+        return this.pathTaken.contains(loc);
     }
 
     @Override
     public int compareTo(Problem o) {
         return roundAwayFromZero(this.lowerBound - o.lowerBound);
+    }
+
+    @Override
+    public String toString() {
+        return "lowerBound=" + lowerBound + ";visited="+pathTaken.size();
     }
 
     private int roundAwayFromZero(double x) {
